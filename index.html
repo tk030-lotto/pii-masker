@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self' blob:; base-uri 'none'; form-action 'none'">
+  <title>個人情報自動マスキングツール</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <h1 class="app-title">個人情報自動マスキングツール</h1>
+      <p class="app-subtitle">画像内の対象領域をブラウザ上で不可逆マスキング（黒塗り）します。画像は外部サーバーへ送信されません。</p>
+    </header>
+
+    <!-- ファイル未選択エリア（初期画面） -->
+    <section id="upload-section" class="card">
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="画像ファイルを選択またはドロップ">
+        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        <div class="dropzone-title">画像を選択、またはここにドラッグ＆ドロップ</div>
+        <div class="dropzone-desc">対応形式: JPEG / PNG / WebP（1枚ずつ処理）</div>
+        <button type="button" id="select-file-btn" class="btn btn-primary">画像を選択</button>
+        <input type="file" id="file-input" class="file-input" accept="image/jpeg,image/png,image/webp">
+      </div>
+      <div id="upload-notice" class="notice-box error hidden mt-4" role="alert"></div>
+      <div class="notice-box mt-4">
+        約1,600万画素を超える画像は縮小して処理します。メタデータ（Exif等）は出力画像に保持されません。
+      </div>
+    </section>
+
+    <!-- 編集・プレビューエリア（画像読み込み後） -->
+    <section id="editor-section" class="card hidden">
+      <!-- 画像情報バー -->
+      <div class="toolbar mb-3">
+        <div class="toolbar-group">
+          <span id="image-name-badge" class="badge">image.png</span>
+          <span id="image-size-badge" class="badge">0 x 0 px</span>
+          <span id="image-resize-badge" class="badge badge-warn hidden">縮小表示</span>
+        </div>
+        <div class="toolbar-group">
+          <span id="mask-count-badge" class="badge">矩形: 0件</span>
+        </div>
+      </div>
+
+      <!-- 操作ツールバー -->
+      <div class="toolbar mb-3">
+        <!-- モード切替 -->
+        <div class="toolbar-group" role="group" aria-label="操作モード切替">
+          <button type="button" id="mode-draw-btn" class="btn btn-active" aria-pressed="true">描画・編集</button>
+          <button type="button" id="mode-pan-btn" class="btn" aria-pressed="false">表示・移動</button>
+        </div>
+
+        <!-- 履歴・削除 -->
+        <div class="toolbar-group" role="group" aria-label="履歴・削除操作">
+          <button type="button" id="undo-btn" class="btn" title="元に戻す (Ctrl+Z)" disabled>元に戻す</button>
+          <button type="button" id="redo-btn" class="btn" title="やり直し (Ctrl+Y)" disabled>やり直し</button>
+          <button type="button" id="delete-selected-btn" class="btn btn-danger" title="選択した矩形を削除 (Delete)" disabled>削除</button>
+          <button type="button" id="clear-all-btn" class="btn" title="すべての矩形を削除">全消去</button>
+        </div>
+      </div>
+
+      <!-- プレビューキャンバス -->
+      <div class="viewer-container">
+        <div id="canvas-wrapper" class="canvas-wrapper">
+          <canvas id="view-canvas" class="canvas-layer"></canvas>
+        </div>
+        <div class="help-text" id="mode-help-text">
+          【描画・編集モード】ドラッグしてマスキング矩形を追加 / 矩形を選択して移動・端をドラッグしてサイズ変更
+        </div>
+      </div>
+
+      <!-- 状態案内ボックス -->
+      <div id="status-notice" class="notice-box hidden mt-4" role="status"></div>
+
+      <!-- リセット確認ボックス（画面内確認UI） -->
+      <div id="reset-confirm-box" class="notice-box warn hidden mt-4" role="region" aria-label="リセット確認">
+        <div class="toolbar">
+          <span>現在の画像と編集内容を破棄して初期画面に戻りますか？</span>
+          <div class="toolbar-group">
+            <button type="button" id="reset-confirm-yes-btn" class="btn btn-danger">破棄してリセット</button>
+            <button type="button" id="reset-confirm-no-btn" class="btn">キャンセル</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- アクションフッター（仕上がり確認・保存・リセット） -->
+      <div class="toolbar action-bar">
+        <div class="toolbar-group">
+          <button type="button" id="preview-toggle-btn" class="btn">仕上がり確認</button>
+          <button type="button" id="reset-btn" class="btn btn-danger">リセット</button>
+        </div>
+        <div class="toolbar-group">
+          <button type="button" id="export-btn" class="btn btn-primary">マスキング画像を保存</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- UI標準準拠フッター -->
+  <footer>
+    © 2026 Zero Dev (tk030) · MIT License ·
+    <a href="https://zero-dev.jp/" target="_blank" rel="noopener">zero-dev.jp</a> ·
+    免責：個人情報の漏洩を防げることを保証しません。出力画像は、ご自身で最終確認してください。
+  </footer>
+
+  <!-- スクリプト読み込み（モジュール構造・相対パス） -->
+  <script src="js/history.js"></script>
+  <script src="js/image.js"></script>
+  <script src="js/masker.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
+
